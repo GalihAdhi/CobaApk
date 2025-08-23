@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "556289902663",
+    "project_id": "galihiot",
+    "storage_bucket": "galihiot.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:556289902663:android:63d3b6cf1d0343e3c74962",
+        "android_client_info": {
+          "package_name": "com.example.coba1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyApj6uEdsG_qfTtbi04y98ftUF-Wjsx6qw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:556289902663:android:72cda12a7a8d0369c74962",
+        "android_client_info": {
+          "package_name": "com.galihiot.iotksh"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyApj6uEdsG_qfTtbi04y98ftUF-Wjsx6qw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

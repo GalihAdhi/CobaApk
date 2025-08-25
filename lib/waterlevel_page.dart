@@ -75,8 +75,8 @@ class _WaterLevelPageState extends State<WaterLevelPage> {
           tinggiMinPercent = minPercent;
           tinggiTandoncm = tinggiTandon;
 
-          tinggiMinCm = tinggiTandoncm - ((tinggiMaxPercent / 100) * tinggiTandoncm).round();
-          tinggiMaxCm = tinggiTandoncm - ((tinggiMinPercent / 100) * tinggiTandoncm).round();
+          tinggiMinCm = _convertToDistance(tinggiMaxPercent);
+          tinggiMaxCm = _convertToDistance(tinggiMinPercent);
         });
 
         debugPrint("🎯 Parameter Tandon ${widget.kodeTandon}: "
@@ -159,7 +159,7 @@ class _WaterLevelPageState extends State<WaterLevelPage> {
 
                   if (context.mounted) {
                     Navigator.pop(context); 
-                    _fetchData(); // refresh data UI
+                    _fetchData();
                     toastification.show(
                       context: context,
                       type: ToastificationType.success,
@@ -178,7 +178,7 @@ class _WaterLevelPageState extends State<WaterLevelPage> {
       },
     );
   }
-
+  
   Future<void> _connectMQTT() async {
     client.logging(on: false);
     client.keepAlivePeriod = 30;
@@ -300,6 +300,15 @@ class _WaterLevelPageState extends State<WaterLevelPage> {
     if (distance >= maxDist) return 0;
     double percent = ((maxDist - distance) / (maxDist - minDist)) * 100;
     return percent.clamp(0, 100);
+  }
+
+  int _convertToDistance(int percent) {
+    const double minDist = 20.0;
+    int maxDist = tinggiTandoncm;
+
+    percent = percent.clamp(0, 100);
+    int distance = (maxDist - (percent / 100) * (maxDist - minDist)).round();
+    return distance;
   }
 
   void _toggleMode() {

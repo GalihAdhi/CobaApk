@@ -120,6 +120,24 @@ class MySQLService {
     return list;
   }
 
+  static Future<List<Map<String, dynamic>>> getParameterTandon(int kodeTandon) async {
+    final conn = await getConnection();
+    var results = await conn.query(
+      'SELECT pt.tinggi_max, pt.tinggi_min, pt.tinggi_tandon '
+      'FROM parameter_tandon pt '
+      'JOIN kode_tandon kt ON kt.id = pt.tandon_id '
+      'WHERE pt.tandon_id = ?',
+       [kodeTandon],
+    );
+    final list = results.map((row) => {
+          'tinggimax': row['tinggi_max'],
+          'tinggimin': row['tinggi_min'],
+          'tinggitandon': row['tinggi_tandon'],
+        }).toList();
+    await conn.close();
+    return list;
+  }
+
   static Future<void> updateParameterTingkatKebisingan(int tenang, int bising) async {
     final conn = await getConnection();
 
@@ -137,6 +155,17 @@ class MySQLService {
     await conn.query(
       'UPDATE parameter SET hot = ?, cold = ? WHERE id = 1',
       [hot, cold],
+    );
+
+    await conn.close();
+  }
+
+  static Future<void> updateParameterWaterLevel(int tinggimax, int tinggimin, int tinggiTandon, int kodeTandon) async {
+    final conn = await getConnection();
+
+    await conn.query(
+      'UPDATE parameter_tandon SET tinggi_max = ?, tinggi_min = ?, tinggi_tandon = ? WHERE tandon_id = ?',
+      [tinggimax, tinggimin, tinggiTandon, kodeTandon],
     );
 
     await conn.close();

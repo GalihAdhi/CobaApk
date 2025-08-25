@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
@@ -23,8 +24,12 @@ class _WaterLevelPageState extends State<WaterLevelPage> {
   double waterPercent = 0.0;
   String lastUpdate = "-";
 
-  int tinggimax = 0;
-  int tinggimin = 0;
+  int tinggiMaxCm = 0;
+  int tinggiMinCm = 0;
+  int tinggiTandoncm = 0;
+
+  int tinggiMaxPercent = 0;
+  int tinggiMinPercent = 0;
 
   String mode = "AUTO";
   bool pumpOn = false;
@@ -32,7 +37,7 @@ class _WaterLevelPageState extends State<WaterLevelPage> {
   late final String topicData;
   late final String topicMode;
   late final String topicOnOff;
-  late final String topicAuto;
+  late final String topicParam;
 
   bool _pageActive = false;
 
@@ -50,7 +55,7 @@ class _WaterLevelPageState extends State<WaterLevelPage> {
     topicData = "iot/waterlevel/${widget.kodeTandon}";
     topicMode = "iot/waterlevel/tombol/mode/${widget.kodeTandon}";
     topicOnOff = "iot/waterlevel/tombol/${widget.kodeTandon}";
-    topicAuto = "iot/waterlevel/tombol/mode/auto/${widget.kodeTandon}";
+    topicParam = "iot/waterlevel/param/${widget.kodeTandon}";
 
     _fetchData();
     _connectMQTT();
@@ -58,14 +63,120 @@ class _WaterLevelPageState extends State<WaterLevelPage> {
 
   Future<void> _fetchData() async {
     try {
-      final param = await MySQLService.getParameter();
+      final param = await MySQLService.getParameterTandon(int.parse(widget.kodeTandon));
       if (param.isNotEmpty) {
-        tinggimax = param.first['tinggi_max'];
-        tinggimin = param.first['tinggi_min'];
+        final data = param.first;
+
+      final tinggiTandon = (data['tinggitandon'] as num?)?.toInt() ?? 0;
+      final maxPercent  = (data['tinggimax'] as num?)?.toInt() ?? 0;
+      final minPercent  = (data['tinggimin'] as num?)?.toInt() ?? 0;
+        setState(() {
+          tinggiMaxPercent = maxPercent;
+          tinggiMinPercent = minPercent;
+          tinggiTandoncm = tinggiTandon;
+
+          tinggiMinCm = tinggiTandoncm - ((tinggiMaxPercent / 100) * tinggiTandoncm).round();
+          tinggiMaxCm = tinggiTandoncm - ((tinggiMinPercent / 100) * tinggiTandoncm).round();
+        });
+
+        debugPrint("🎯 Parameter Tandon ${widget.kodeTandon}: "
+            "Max=${tinggiMinCm.toStringAsFixed(2)}cm "
+            "| Min=${tinggiMaxCm.toStringAsFixed(2)}cm");
+
+        // langsung publish parameter ke ESP32
+        _publishMessage("param", jsonEncode({
+          "tinggi_max": tinggiMinCm,
+          "tinggi_min": tinggiMaxCm,
+        }));
       }
     } catch (e) {
-      debugPrint("Error fetching water_level: $e");
+      debugPrint("❌ Error fetching parameter: $e");
     }
+  }
+
+  void _showParameterWaterLevelSettings(BuildContext context, int kodeTandon, int tinggiMin, int tinggiMax) {
+    final tinggiMinController = TextEditingController(text: tinggiMin.toString());
+    final tinggiMaxController = TextEditingController(text: tinggiMax.toString());
+    final tinggiTandonController = TextEditingController(text: tinggiTandoncm.toString());
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Edit Parameter Tandon",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: tinggiMinController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: "Tinggi Minimum (%)"),
+              ),
+              TextField(
+                controller: tinggiMaxController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: "Tinggi Maksimum (%)"),
+              ),
+              TextField(
+                controller: tinggiTandonController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: "Tinggi Tandon (cm)"),
+              ),
+              const SizedBox(height: 20),
+
+              ElevatedButton.icon(
+                icon: const Icon(Icons.save),
+                label: const Text("Simpan"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () async {
+                  await MySQLService.updateParameterWaterLevel(
+                    int.tryParse(tinggiMaxController.text) ?? tinggiMax,
+                    int.tryParse(tinggiMinController.text) ?? tinggiMin,
+                    int.tryParse(tinggiTandonController.text) ?? tinggiTandoncm.toInt(),
+                    kodeTandon,
+                  );
+
+                  if (context.mounted) {
+                    Navigator.pop(context); 
+                    _fetchData(); // refresh data UI
+                    toastification.show(
+                      context: context,
+                      type: ToastificationType.success,
+                      style: ToastificationStyle.flatColored,
+                      title: const Text("Berhasil"),
+                      description: const Text("Parameter tandon berhasil diperbarui"),
+                      autoCloseDuration: const Duration(seconds: 3),
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _connectMQTT() async {
@@ -169,8 +280,8 @@ class _WaterLevelPageState extends State<WaterLevelPage> {
     String topic;
     if (type == "mode") {
       topic = topicMode;
-    } else if (type == "auto") {
-      topic = topicAuto;
+    } else if (type == "param") {
+      topic = topicParam;
     } else {
       topic = topicOnOff;
     }
@@ -184,7 +295,7 @@ class _WaterLevelPageState extends State<WaterLevelPage> {
 
   double _convertToPercent(double distance) {
     const double minDist = 20.0;
-    const double maxDist = 250.0;
+    int maxDist = tinggiTandoncm;
     if (distance <= minDist) return 100;
     if (distance >= maxDist) return 0;
     double percent = ((maxDist - distance) / (maxDist - minDist)) * 100;
@@ -376,6 +487,65 @@ class _WaterLevelPageState extends State<WaterLevelPage> {
                               fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                       ),
+                    
+                    if (mode == "AUTO")
+                      Card(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 4,
+                        child: Stack(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    "Batas Parameter",
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text("Pompa Hidup < $tinggiMinPercent%",
+                                          style: const TextStyle(color: Colors.green)),
+                                    ],
+                                  ),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text("$tinggiMaxPercent % < Pompa Mati", style: TextStyle(color: Colors.red)),
+                                    ],
+                                  ),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text("Tinggi Tandon: $tinggiTandoncm", style: TextStyle(color: Colors.grey)),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: IconButton(
+                                icon: const Icon(Icons.settings, color: Colors.blue),
+                                onPressed: () {
+                                  _showParameterWaterLevelSettings(context, int.parse(widget.kodeTandon), tinggiMinPercent, tinggiMaxPercent);
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                   ],
                 ),
               ),

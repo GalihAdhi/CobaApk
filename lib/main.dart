@@ -4,7 +4,7 @@ import 'package:toastification/toastification.dart';
 
 void main() {
   runApp(
-    ToastificationWrapper( // WAJIB dibungkus sekali di root
+    ToastificationWrapper( 
       child: const MyApp(),
     ),
   );  

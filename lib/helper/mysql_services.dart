@@ -195,8 +195,8 @@ class MySQLService {
     final conn = await getConnection();
 
     await conn.query(
-      'UPDATE users SET fcm_token = ? WHERE id = ?',
-      [token, userId],
+      'insert into fcm_token (user_id, fcm_token) values (?, ?)',
+      [userId, token],
     );
 
     await conn.close();

@@ -190,5 +190,16 @@ class MySQLService {
     }
     return null;
   }
+
+  static Future<void> saveFCMToken(int userId, String token) async {
+    final conn = await getConnection();
+
+    await conn.query(
+      'UPDATE users SET fcm_token = ? WHERE id = ?',
+      [token, userId],
+    );
+
+    await conn.close();
+  }
 }
 

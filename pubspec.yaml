@@ -41,6 +41,7 @@ dependencies:
   flutter_launcher_icons: "^0.14.4"
   toastification: "^3.0.3"
   firebase_core: ^4.0.0
+  firebase_messaging: ^16.0.0
 
 dev_dependencies:
   flutter_test:

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'helper/mysql_services.dart';
 import 'dashboard_page.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -30,7 +31,15 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
 
       if (user != null) {
-        // Animasi transisi slide + fade
+        String? token = await FirebaseMessaging.instance.getToken();
+        if (token != null) {
+          try {
+            await MySQLService.saveFCMToken(user['id'], token);
+            debugPrint("✅ FCM token tersimpan di server: $token");
+          } catch (e) {
+            debugPrint("⚠️ Gagal simpan FCM token: $e");
+          }
+        }
         Navigator.pushReplacement(
           context,
           PageRouteBuilder(

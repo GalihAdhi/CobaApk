@@ -1,346 +1,161 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-
-import 'helper/mysql_services.dart';
-import 'waterlevel_page.dart';
-import 'tingkatkebisingan_page.dart';
-import 'suhu_page.dart';
-import 'login_page.dart';
+import '../helper/mysql_services.dart';
+import 'detail_waterlevel_page.dart';
+import 'detail_tingkatkebisingan_page.dart';
+import 'detail_suhu_page.dart';
 
 class DashboardPage extends StatefulWidget {
-  final String username;
+  final List<Map<String, dynamic>> pinnedTandons;
+  final Map<String, String> sensorData;
 
-  const DashboardPage({super.key, required this.username});
+  const DashboardPage({
+    super.key,
+    required this.pinnedTandons,
+    required this.sensorData,
+  });
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  List<Map<String, dynamic>> tandonList = [];
-  List<Map<String, dynamic>> ruangKebisinganList = [];
-  List<Map<String, dynamic>> ruangSuhuList = [];
-
-  String? selectedTandonCode;
-  String? selectedRuangKebisingan;
-  String? selectedRuangSuhu;
-
-  int? expandedIndex;
-
+  List<Map<String, dynamic>> _ruangKebisingan = [];
+  List<Map<String, dynamic>> _ruangSuhu = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchTandon();
-    _fetchRuanganKebisingan();
-    _fetchRuanganSuhu();
+    _loadData();
   }
 
-  Future<void> _fetchTandon() async {
-    try {
-      final data = await MySQLService.getKodeTandon();
-      setState(() {
-        tandonList = data;
-      });
-    } catch (e) {
-      debugPrint("Error fetching tandon: $e");
+  Future<void> _loadData() async {
+    final ruangKebisingan = await MySQLService.getKodeRuanganKebisingan();
+    final List<Map<String, dynamic>> kebisinganWithValue = [];
+
+    for (var ruang in ruangKebisingan) {
+      final data = await MySQLService.getTingkatKebisingan(ruang['kode_ruang']);
+      if (data.isNotEmpty) {
+        kebisinganWithValue.add({
+          'nama': ruang['nama_ruang'],
+          'value': "${data.last['tingkat_kebisingan']} dB",
+          'kode_ruang': ruang['kode_ruang'],
+        });
+      }
     }
-  }
 
-  Future<void> _fetchRuanganKebisingan() async {
-    try {
-      final data = await MySQLService.getKodeRuanganKebisingan();
-      setState(() {
-        ruangKebisinganList = data;
-      });
-    } catch (e) {
-      debugPrint("Error fetching ruangan: $e");
+    final ruangSuhu = await MySQLService.getKodeRuanganSuhu();
+    final List<Map<String, dynamic>> suhuWithValue = [];
+
+    for (var ruang in ruangSuhu) {
+      final data = await MySQLService.getSuhu(ruang['kode_ruang']);
+      if (data.isNotEmpty) {
+        suhuWithValue.add({
+          'nama': ruang['nama_ruang'],
+          'value': "${data.first['suhu']}°C",
+           'kode_ruang': ruang['kode_ruang'],
+        });
+      }
     }
+
+    setState(() {
+      _ruangKebisingan = kebisinganWithValue;
+      _ruangSuhu = suhuWithValue;
+    });
   }
 
-  Future<void> _fetchRuanganSuhu() async {
-    try {
-      final data = await MySQLService.getKodeRuanganSuhu();
-      setState(() {
-        ruangSuhuList = data;
-      });
-    } catch (e) {
-      debugPrint("Error fetching ruangan: $e");
-    }
-  }
+  Widget _buildSection(
+    String title,
+    IconData icon,
+    Color color,
+    List<Map<String, dynamic>> items,
+  ) {
+    if (items.isEmpty) return const SizedBox.shrink();
 
-  void _goToWaterLevelPage() {
-    if (selectedTandonCode != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => WaterLevelPage(kodeTandon: selectedTandonCode!),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, color: color),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
+              ),
+            ],
+          ),
         ),
-      );
-    }
-  }
-
-  void _goToKebisinganPage() {
-    if (selectedRuangKebisingan != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              TingkatKebisinganPage(kodeRuangan: selectedRuangKebisingan!),
-        ),
-      );
-    }
-  }
-
-  void _goToSuhuPage() {
-    if (selectedRuangSuhu != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => SuhuPage(kodeRuangan: selectedRuangSuhu!),
-        ),
-      );
-    }
-  }
-
-  void _logout() {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (route) => false,
+        ...items.map((item) => Card(
+              elevation: 3,
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: ListTile(
+                title: Text(item['nama']),
+                trailing: Text(
+                  item['value'],
+                  style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 16),
+                ),
+                onTap: () {
+                  if (item['type'] == 'water') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DetailWaterLevelPage(kodeTandon: item['kode']),
+                      ),
+                    );
+                  } else if (item['type'] == 'noise') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DetailTingkatKebisinganPage(kodeRuangan: item['kode']),
+                      ),
+                    );
+                  } else if (item['type'] == 'temp') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DetailSuhuPage(kodeRuangan: item['kode']),
+                      ),
+                    );
+                  }
+                },
+              ),
+            )),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final cards = [
-      {
-        "title": "Water Level",
-        "icon": Icons.water_drop_rounded,
-        "color": Colors.blueAccent,
-        "dropdownValue": selectedTandonCode,
-        "dropdownHint": "Pilih Tandon",
-        "items": tandonList.map((t) {
-          return DropdownMenuItem<String>(
-            value: t['kode_tandon'],
-            child: Text(t['nama_tandon']),
-          );
-        }).toList(),
-        "onChanged": (String? value) {
-          setState(() {
-            selectedTandonCode = value;
-          });
-        },
-        "buttonText": "Lihat Water Level",
-        "onPressed": _goToWaterLevelPage,
-      },
-      {
-        "title": "Tingkat Kebisingan",
-        "icon": Icons.volume_up_rounded,
-        "color": Colors.deepOrangeAccent,
-        "dropdownValue": selectedRuangKebisingan,
-        "dropdownHint": "Pilih Ruangan",
-        "items": ruangKebisinganList.map((r) {
-          return DropdownMenuItem<String>(
-            value: r['kode_ruang'],
-            child: Text(r['nama_ruang']),
-          );
-        }).toList(),
-        "onChanged": (String? value) {
-          setState(() {
-            selectedRuangKebisingan = value;
-          });
-        },
-        "buttonText": "Lihat Tingkat Kebisingan",
-        "onPressed": _goToKebisinganPage,
-      },
-      {
-        "title": "Suhu",
-        "icon": Icons.thermostat_rounded,
-        "color": Colors.red,
-        "dropdownValue": selectedRuangSuhu,
-        "dropdownHint": "Pilih Ruangan",
-        "items": ruangSuhuList.map((r) {
-          return DropdownMenuItem<String>(
-            value: r['kode_ruang'],
-            child: Text(r['nama_ruang']),
-          );
-        }).toList(),
-        "onChanged": (String? value) {
-          setState(() {
-            selectedRuangSuhu = value;
-          });
-        },
-        "buttonText": "Lihat Suhu",
-        "onPressed": _goToSuhuPage,
-      },
-    ];
+    final waterLevelItems = widget.pinnedTandons.map((tandon) => {
+      'nama': tandon['nama_tandon']?.toString() ?? 'Unknown',
+      'value': widget.sensorData[tandon['kode_tandon']]?.toString() ?? "Menunggu data...",
+      'kode': tandon['kode_tandon']?.toString() ?? '',
+      'type': 'water',
+    }).toList();
+    final kebisinganItems = _ruangKebisingan.map((ruang) => {
+      'nama': ruang['nama']?.toString() ?? '',
+      'value': ruang['value']?.toString() ?? '',
+      'kode': ruang['kode_ruang']?.toString() ?? '',
+      'type': 'noise',
+    }).toList();
+    final suhuItems = _ruangSuhu.map((ruang) => {
+      'nama': ruang['nama']?.toString() ?? '',
+      'value': ruang['value']?.toString() ?? '',
+      'kode': ruang['kode_ruang']?.toString() ?? '',
+      'type': 'temp',
+    }).toList();
 
     return Scaffold(
-      resizeToAvoidBottomInset: true,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF4facfe), Color(0xFF00f2fe)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Image(
-                            image: AssetImage('assets/hospital.png'),
-                            width: 38,
-                            height: 38),
-                        const SizedBox(width: 10),
-                        Text(
-                          "IoT Dashboard",
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium!
-                              .copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                        ),
-                      ],
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.logout, color: Colors.white),
-                      onPressed: _logout,
-                      tooltip: "Logout",
-                    ),
-                  ],
-                ),
-              ),
-
-              Text(
-                "Selamat datang, ${widget.username}",
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.white70,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: cards.length,
-                  itemBuilder: (context, index) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _buildCard(cards[index], index),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCard(Map<String, dynamic> c, int index) {
-    final isExpanded = expandedIndex == index;
-
-    return Card(
-      elevation: 6,
-      shadowColor: Colors.black26,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          setState(() {
-            expandedIndex = isExpanded ? null : index;
-          });
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: (c["color"] as Color).withValues(alpha: 0.10),
-                    child: Icon(c["icon"] as IconData,
-                        color: c["color"] as Color, size: 24),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      c["title"] as String,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
-                    color: Colors.grey[600],
-                  ),
-                ],
-              ),
-
-              AnimatedSize(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOut,
-                alignment: Alignment.topCenter,
-                child: isExpanded
-                    ? Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Column(
-                          children: [
-                            DropdownButton<String>(
-                              value: c["dropdownValue"] as String?,
-                              hint: Text(c["dropdownHint"] as String),
-                              isExpanded: true,
-                              items: c["items"] as List<DropdownMenuItem<String>>,
-                              onChanged: c["onChanged"] as ValueChanged<String?>,
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: c["onPressed"] as VoidCallback,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: c["color"] as Color,
-                                  foregroundColor: Colors.white,
-                                  minimumSize:
-                                      const Size(double.infinity, 48),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  elevation: 2,
-                                ),
-                                child: Text(
-                                  c["buttonText"] as String,
-                                  style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          ),
-        ),
+      appBar: AppBar(title: const Text("Dashboard")),
+      body: ListView(
+        children: [
+          _buildSection("Water Level", Icons.water_drop, Colors.blueAccent, waterLevelItems),
+          _buildSection("Tingkat Kebisingan", Icons.volume_up, Colors.orange, kebisinganItems),
+          _buildSection("Suhu Ruangan", Icons.thermostat, Colors.redAccent, suhuItems),
+        ],
       ),
     );
   }

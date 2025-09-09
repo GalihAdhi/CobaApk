@@ -6,20 +6,21 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:toastification/toastification.dart';
 import 'helper/mysql_services.dart';
 
-class SuhuPage extends StatefulWidget {
+class DetailTingkatKebisinganPage extends StatefulWidget {
   final String kodeRuangan;
-  const SuhuPage({super.key, required this.kodeRuangan});
+  const DetailTingkatKebisinganPage({super.key, required this.kodeRuangan});
 
   @override
-  State<SuhuPage> createState() => _SuhuPageState();
+  State<DetailTingkatKebisinganPage> createState() => _DetailTingkatKebisinganPageState();
 }
 
-class _SuhuPageState extends State<SuhuPage> {
-  double suhu = 0.0;
+class _DetailTingkatKebisinganPageState extends State<DetailTingkatKebisinganPage> {
+  double dbSound = 0.0;
   String namaRuangan = "";
+  int tenang = 0;
+  int hening = 0;
+  int bising = 0;
   DateTime? date;
-  int hot = 0;
-  int cold = 0;
   Timer? _timer;
 
   @override
@@ -38,27 +39,29 @@ class _SuhuPageState extends State<SuhuPage> {
 
   Future<void> _fetchData() async {
     try {
-      final data = await MySQLService.getSuhu(widget.kodeRuangan);
+      final data =
+          await MySQLService.getTingkatKebisingan(widget.kodeRuangan);
       final param = await MySQLService.getParameter();
       if (data.isNotEmpty) {
         setState(() {
-          suhu = data.first['suhu']?.toDouble() ?? 0.0;
+          dbSound = data.first['tingkat_kebisingan'] ?? 0.0;
           namaRuangan = data.first['nama_ruang'] ?? "";
-          date = DateTime.tryParse(data.first['waktu']);
+          date = DateTime.parse(data.first['waktu']);
           if (param.isNotEmpty) {
-              hot = param.first['hot'];
-              cold = param.first['cold'];
+            tenang = param.first['tenang'];
+            hening = param.first['hening'];
+            bising = param.first['bising'];
           }
         });
       }
     } catch (e) {
-      debugPrint("Error fetching suhu: $e");
+      debugPrint("Error fetching kebisingan: $e");
     }
   }
 
   void _showParameterSettings(BuildContext context) {
-    final hotController = TextEditingController(text: hot.toString());
-    final coldController = TextEditingController(text: cold.toString());
+    final tenangController = TextEditingController(text: tenang.toString());
+    final bisingController = TextEditingController(text: bising.toString());
 
     showModalBottomSheet(
       context: context,
@@ -83,14 +86,14 @@ class _SuhuPageState extends State<SuhuPage> {
               ),
               const SizedBox(height: 16),
               TextField(
-                controller: hotController,
+                controller: tenangController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Hot (dB)"),
+                decoration: const InputDecoration(labelText: "Tenang (dB)"),
               ),
               TextField(
-                controller: coldController,
+                controller: bisingController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Cold (dB)"),
+                decoration: const InputDecoration(labelText: "Bising (dB)"),
               ),
               const SizedBox(height: 20),
 
@@ -106,13 +109,13 @@ class _SuhuPageState extends State<SuhuPage> {
                   ),
                 ),
                 onPressed: () async {
-                  await MySQLService.updateParameterSuhu(
-                    int.tryParse(hotController.text) ?? cold,
-                    int.tryParse(coldController.text) ?? hot,
+                  await MySQLService.updateParameterTingkatKebisingan(
+                    int.tryParse(tenangController.text) ?? tenang,
+                    int.tryParse(bisingController.text) ?? bising,
                   );
 
                   if (context.mounted) {
-                    Navigator.pop(context);
+                    Navigator.pop(context); 
                     _fetchData();
                     toastification.show(
                       context: context,
@@ -139,9 +142,18 @@ class _SuhuPageState extends State<SuhuPage> {
         ? DateFormat("dd MMMM yyyy HH:mm:ss", "id_ID").format(date!)
         : "-";
 
+    String statusKebisingan;
+    if (dbSound < tenang) {
+      statusKebisingan = "Hening";
+    } else if (dbSound >= tenang && dbSound < bising) {
+      statusKebisingan = "Tenang";
+    } else {
+      statusKebisingan = "Bising";
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Monitoring Suhu"),
+        title: const Text("Tingkat Kebisingan"),
         centerTitle: true,
         elevation: 0,
       ),
@@ -189,8 +201,8 @@ class _SuhuPageState extends State<SuhuPage> {
                         showLabels: false,
                         startAngle: 180,
                         endAngle: 0,
-                        minimum: 0,
-                        maximum: 50,
+                        minimum: 30,
+                        maximum: 130,
                         axisLineStyle: const AxisLineStyle(
                           thickness: 28,
                           thicknessUnit: GaugeSizeUnit.logicalPixel,
@@ -199,13 +211,13 @@ class _SuhuPageState extends State<SuhuPage> {
                         ),
                         pointers: [
                           RangePointer(
-                            value: suhu,
+                            value: dbSound,
                             width: 28,
                             sizeUnit: GaugeSizeUnit.logicalPixel,
                             cornerStyle: CornerStyle.bothCurve,
                             enableAnimation: true,
                             gradient: const SweepGradient(
-                              colors: [Colors.blue, Colors.green, Colors.red],
+                              colors: [Colors.green, Colors.orange, Colors.red],
                               stops: [0.0, 0.5, 1.0],
                             ),
                           ),
@@ -216,22 +228,20 @@ class _SuhuPageState extends State<SuhuPage> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  "${suhu.toStringAsFixed(1)} °C",
+                                  "${dbSound.toStringAsFixed(1)} dB",
                                   style: TextStyle(
                                     fontSize: 42,
                                     fontWeight: FontWeight.bold,
-                                    color: suhu < cold
-                                        ? Colors.blue
-                                        : (suhu > hot
-                                            ? Colors.red
-                                            : Colors.green),
+                                    color: dbSound < hening
+                                        ? Colors.green
+                                        : (dbSound < bising
+                                            ? Colors.orange
+                                            : Colors.red),
                                   ),
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  suhu < 20
-                                      ? "Dingin"
-                                      : (suhu < 35 ? "Normal" : "Panas"),
+                                  statusKebisingan,
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w600,
@@ -277,14 +287,21 @@ class _SuhuPageState extends State<SuhuPage> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text("Terlalu Dingin < $cold",
-                                style: const TextStyle(color: Colors.blue)),
+                            Text("Hening < $tenang dB",
+                                style: const TextStyle(color: Colors.green)),
                           ],
                         ),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text("$hot > Terlalu Panas", style: TextStyle(color: Colors.red)),
+                            Text("$tenang dB < Tenang < $bising dB",
+                                style: const TextStyle(color: Colors.orange)),
+                          ],
+                        ),
+                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text("$bising dB < Bising", style: TextStyle(color: Colors.red)),
                           ],
                         ),
                       ],

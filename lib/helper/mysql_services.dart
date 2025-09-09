@@ -13,11 +13,20 @@ class MySQLService {
 
   static Future<List<Map<String, dynamic>>> getKodeTandon() async {
     final conn = await getConnection();
-    var results = await conn.query('SELECT kode_tandon, nama_tandon FROM kode_tandon');
+    var results = await conn.query('''
+    SELECT kt.*, pt.tinggi_max, pt.tinggi_min , pt.tinggi_tandon  
+    FROM kode_tandon kt 
+    LEFT JOIN parameter_tandon pt on pt.tandon_id = kt.id ''');
     final list = results.map((row) => {
-      'kode_tandon': row[0],
-      'nama_tandon': row[1],
-    }).toList();    await conn.close();
+      'id': row['id'],
+      'kode_tandon': row['kode_tandon'],
+      'nama_tandon': row['nama_tandon'],
+      'pinned': row['pinned'],
+      'tinggi_min': row['tinggi_min'],
+      'tinggi_max': row['tinggi_max'],
+      'tinggi_tandon': row['tinggi_tandon'],
+    }).toList();    
+    await conn.close();
     return list;
   }
 
@@ -160,12 +169,12 @@ class MySQLService {
     await conn.close();
   }
 
-  static Future<void> updateParameterWaterLevel(int tinggimax, int tinggimin, int tinggiTandon, int kodeTandon) async {
+  static Future<void> updateParameterWaterLevel(int tinggimax, int tinggimin, int tinggiTandon, int tandonID) async {
     final conn = await getConnection();
 
     await conn.query(
       'UPDATE parameter_tandon SET tinggi_max = ?, tinggi_min = ?, tinggi_tandon = ? WHERE tandon_id = ?',
-      [tinggimax, tinggimin, tinggiTandon, kodeTandon],
+      [tinggimax, tinggimin, tinggiTandon, tandonID],
     );
 
     await conn.close();
@@ -189,6 +198,37 @@ class MySQLService {
       };
     }
     return null;
+  }
+
+    static Future<void> addTandon(String kodeTandon, String namaTandon) async {
+    final conn = await getConnection();
+    await conn.query(
+      'INSERT INTO kode_tandon (kode_tandon, nama_tandon, pinned) VALUES (?, ?, 0)',
+      [kodeTandon, namaTandon],
+    );
+    await conn.close();
+  }
+
+  static Future<void> updatePinTandon(String kodeTandon, int pinned) async {
+    final conn = await getConnection();
+    await conn.query(
+      'UPDATE kode_tandon SET pinned = ? WHERE kode_tandon = ?',
+      [pinned, kodeTandon],
+    );
+    await conn.close();
+  }
+
+  static Future<List<Map<String, dynamic>>> getPinnedTandon() async {
+    final conn = await getConnection();
+    var results = await conn.query(
+      'SELECT kode_tandon, nama_tandon FROM kode_tandon WHERE pinned = 1',
+    );
+    final list = results.map((row) => {
+      'kode_tandon': row['kode_tandon'],
+      'nama_tandon': row['nama_tandon'],
+    }).toList();
+    await conn.close();
+    return list;
   }
 
   static Future<void> saveFCMToken(int userId, String token) async {

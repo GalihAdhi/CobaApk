@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'helper/mysql_services.dart';
-import 'dashboard_page.dart';
+import 'app_wrapper.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 class LoginPage extends StatefulWidget {
@@ -45,7 +45,7 @@ class _LoginPageState extends State<LoginPage> {
           PageRouteBuilder(
             transitionDuration: const Duration(milliseconds: 700),
             pageBuilder: (context, animation, secondaryAnimation) =>
-                DashboardPage(username: user['username']),
+                const AppWrapper(),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
               final offsetAnimation = Tween<Offset>(

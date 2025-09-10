@@ -73,9 +73,6 @@ class _DetailWaterLevelPageState extends State<DetailWaterLevelPage> {
           tinggiMaxPercent = maxPercent;
           tinggiMinPercent = minPercent;
           tinggiTandoncm = tinggiTandon;
-
-          tinggiMinCm = _convertToDistance(tinggiMaxPercent);
-          tinggiMaxCm = _convertToDistance(tinggiMinPercent);
         });
 
         debugPrint("🎯 Parameter Tandon ${widget.kodeTandon}: "
@@ -237,17 +234,25 @@ class _DetailWaterLevelPageState extends State<DetailWaterLevelPage> {
           debugPrint("📩 [MQTT] Topic: $topic | Message: $message");
 
           if (topic == topicData) {
-            final distance = double.tryParse(message);
-            if (distance == null) {
-              debugPrint("⚠️ Invalid number: $message");
+            final parts = message.split(",");
+            int? percent;
+
+            for (var p in parts) {
+              p = p.trim();
+              if (p.startsWith("persen:")) {
+                percent = int.tryParse(p.replaceFirst("persen:", "").trim());
+                break;
+              }
+            }
+
+            if (percent == null) {
+              debugPrint("⚠️ Invalid payload: $message");
               return;
             }
 
-            final percent = _convertToPercent(distance);
-
             if (mounted) {
               setState(() {
-                waterPercent = percent.isNaN || percent.isInfinite ? 0.0 : percent;
+                waterPercent = percent!.clamp(0, 100).toDouble();
                 lastUpdate = DateFormat("dd MMMM yyyy HH:mm:ss", "id_ID").format(DateTime.now());
               });
             }
@@ -287,24 +292,6 @@ class _DetailWaterLevelPageState extends State<DetailWaterLevelPage> {
 
     client.publishMessage(topic, MqttQos.atMostOnce, builder.payload!);
     debugPrint("➡️ Publish: $topic | $payload");
-  }
-
-  double _convertToPercent(double distance) {
-    const double minDist = 20.0;
-    int maxDist = tinggiTandoncm;
-    if (distance <= minDist) return 100;
-    if (distance >= maxDist) return 0;
-    double percent = ((maxDist - distance) / (maxDist - minDist)) * 100;
-    return percent.clamp(0, 100);
-  }
-
-  int _convertToDistance(int percent) {
-    const double minDist = 20.0;
-    int maxDist = tinggiTandoncm;
-
-    percent = percent.clamp(0, 100);
-    int distance = (maxDist - (percent / 100) * (maxDist - minDist)).round();
-    return distance;
   }
 
   void _toggleMode() {

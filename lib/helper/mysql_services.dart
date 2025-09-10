@@ -200,11 +200,16 @@ class MySQLService {
     return null;
   }
 
-    static Future<void> addTandon(String kodeTandon, String namaTandon) async {
+  static Future<void> addTandon(String kodeTandon, String namaTandon) async {
     final conn = await getConnection();
-    await conn.query(
+    var result = await conn.query(
       'INSERT INTO kode_tandon (kode_tandon, nama_tandon, pinned) VALUES (?, ?, 0)',
       [kodeTandon, namaTandon],
+    );
+    int tandonID = result.insertId!;
+    await conn.query(
+      'INSERT INTO parameter_tandon (tandon_id, tinggi_min, tinggi_max, tinggi_tandon) VALUES (?, 0, 100, 50)',
+      [tandonID],
     );
     await conn.close();
   }
@@ -234,10 +239,17 @@ class MySQLService {
   static Future<void> saveFCMToken(int userId, String token) async {
     final conn = await getConnection();
 
-    await conn.query(
-      'insert into fcm_token (user_id, fcm_token) values (?, ?)',
-      [userId, token],
+    var existing = await conn.query(
+      'SELECT * FROM fcm_token WHERE fcm_token = ? LIMIT 1',
+      [token],
     );
+
+    if (existing.isEmpty) {
+      await conn.query(
+        'INSERT INTO fcm_token (user_id, fcm_token) VALUES (?, ?)',
+        [userId, token],
+      );
+    }
 
     await conn.close();
   }

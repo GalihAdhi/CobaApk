@@ -10,6 +10,7 @@ class MQTTServices {
 
   static bool _isConnecting = false;
   static bool _isConnected = false;
+  static bool _hasConnected = false;
 
   static MQTTMessageHandler? _onMessage;
   static MQTTDisconnectHandler? _onDisconnected;
@@ -42,6 +43,7 @@ static Future<void> connect() async {
     if (status?.state == MqttConnectionState.connected) {
       debugPrint('✅ MQTT Connected');
       _isConnected = true;
+      _hasConnected = true;
       _onConnected?.call();
 
       _client!.updates?.listen((messages) {
@@ -80,6 +82,9 @@ static Future<void> connect() async {
 
   static void setOnConnected(VoidCallback handler) {
     _onConnected = handler;
+    if (_isConnected && _hasConnected) {
+      _onConnected?.call();
+    }
   }
 
   static void subscribe(String topic) {

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
@@ -81,13 +80,10 @@ class _DetailWaterLevelPageState extends State<DetailWaterLevelPage> {
 
         debugPrint("🎯 Parameter Tandon ${widget.kodeTandon}: "
             "Max=${tinggiMinCm.toStringAsFixed(2)}cm "
-            "| Min=${tinggiMaxCm.toStringAsFixed(2)}cm");
+            "| Min=${tinggiMaxCm.toStringAsFixed(2)}cm"
+            "| tinggiTandon = ${tinggiTandoncm.toStringAsFixed(2)}");
 
-        // langsung publish parameter ke ESP32
-        _publishMessage("param", jsonEncode({
-          "tinggi_max": tinggiMinCm,
-          "tinggi_min": tinggiMaxCm,
-        }));
+        _publishMessage("param", "tinggiTandon=$tinggiTandoncm");
       }
     } catch (e) {
       debugPrint("❌ Error fetching parameter: $e");

@@ -69,6 +69,7 @@ class _WaterLevelPageState extends State<WaterLevelPage> {
                 kodeController.text,
                 namaController.text,
               );
+              if (!mounted) return; 
               Navigator.pop(context);
               _loadTandons();
             },
@@ -136,10 +137,9 @@ class _WaterLevelPageState extends State<WaterLevelPage> {
                 tandonID,
               );
               if (context.mounted) {
-                await MQTTServices.publishMessage(
-                  "iot/waterlevel/param/${tandons.firstWhere((t) => t['id'] == tandonID)['kode_tandon']}",
-                  tinggiTandonBaru.toString(),
-                );
+                String topic = "iot/waterlevel/param/${tandons.firstWhere((t) => t['id'] == tandonID)['kode_tandon']}";
+                String payload = "tinggiTandon=$tinggiTandonBaru"; 
+                await MQTTServices.publishMessage(topic, payload);
                 Navigator.pop(context);
                 toastification.show(
                   context: context,

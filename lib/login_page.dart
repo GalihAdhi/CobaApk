@@ -29,7 +29,6 @@ class _LoginPageState extends State<LoginPage> {
       );
 
       if (!mounted) return;
-
       if (user != null) {
         String? token = await FirebaseMessaging.instance.getToken();
         if (token != null) {
@@ -40,6 +39,7 @@ class _LoginPageState extends State<LoginPage> {
             debugPrint("⚠️ Gagal simpan FCM token: $e");
           }
         }
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           PageRouteBuilder(

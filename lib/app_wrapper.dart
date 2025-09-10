@@ -23,26 +23,56 @@ class _AppWrapperState extends State<AppWrapper> {
   @override
   void initState() {
     super.initState();
-    _initData();
-    _initMQTT();
+      _initData(firstTime: true).then((_) => _initMQTT());
   }
 
-  Future<void> _initData() async {
-    final data = await MySQLService.getPinnedTandon();
+  Future<void> _initData({bool firstTime = false}) async {
+    final data = await MySQLService.getKodeTandon();
+
+    if (firstTime) {
+      // Auto-pin hanya kalau pertama kali app dijalankan
+      for (var t in data) {
+        if (t['pinned'] != 1) {
+          await MySQLService.updatePinTandon(t['kode_tandon'], 1);
+          t['pinned'] = 1;
+        }
+      }
+    }
+
+    // Update state pinnedTandons sesuai DB
     setState(() {
-      pinnedTandons = data;
+      pinnedTandons = data.where((t) => t['pinned'] == 1).toList();
       isLoading = false;
     });
 
-    // subscribe topic untuk semua pinned tandon
-    for (var t in data) {
+    _subscribePinnedTandons();
+  }
+
+  void _subscribePinnedTandons() {
+    for (var t in pinnedTandons) {
+      debugPrint("coba subscribe");
       final topic = "iot/waterlevel/${t['kode_tandon']}";
       MQTTServices.subscribe(topic);
     }
   }
 
+
   Future<void> _initMQTT() async {
     await MQTTServices.connect();
+    MQTTServices.setOnConnected(() {
+      if (!mounted) return;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        toastification.show(
+          context: context,
+          type: ToastificationType.success,
+          style: ToastificationStyle.flatColored,
+          title: const Text("MQTT Connected"),
+          autoCloseDuration: const Duration(seconds: 2),
+        );
+      });
+      _subscribePinnedTandons();
+    });
 
     MQTTServices.setMessageHandler((topic, message) {
       final kodeTandon = topic.split('/').last;
@@ -51,23 +81,17 @@ class _AppWrapperState extends State<AppWrapper> {
       });
     });
 
-    MQTTServices.setOnConnected(() {
-      toastification.show(
-        context: context,
-        type: ToastificationType.success,
-        style: ToastificationStyle.flatColored,
-        title: const Text("MQTT Connected"),
-        autoCloseDuration: const Duration(seconds: 2),
-      );
-    });
     MQTTServices.setOnDisconnected(() {
-      toastification.show(
-        context: context,
-        type: ToastificationType.error,
-        style: ToastificationStyle.flatColored,
-        title: const Text("MQTT Disconnected"),
-        autoCloseDuration: const Duration(seconds: 2),
-      );
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        toastification.show(
+          context: context,
+          type: ToastificationType.error,
+          style: ToastificationStyle.flatColored,
+          title: const Text("MQTT Disconnected"),
+          autoCloseDuration: const Duration(seconds: 2),
+        );
+      });
     });
   }
 

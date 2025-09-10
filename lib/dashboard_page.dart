@@ -129,11 +129,29 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    final waterLevelItems = widget.pinnedTandons.map((tandon) => {
-      'nama': tandon['nama_tandon']?.toString() ?? 'Unknown',
-      'value': widget.sensorData[tandon['kode_tandon']]?.toString() ?? "Menunggu data...",
-      'kode': tandon['kode_tandon']?.toString() ?? '',
-      'type': 'water',
+    final waterLevelItems = widget.pinnedTandons.map((tandon) {
+      final sensorData = widget.sensorData[tandon['kode_tandon']];
+      if (sensorData != null) {
+        final jarakMatch = RegExp(r'jarak\s*:\s*(\d+\.?\d*)').firstMatch(sensorData);
+        final persenMatch = RegExp(r'persen\s*:\s*(\d+\.?\d*)').firstMatch(sensorData);
+        
+        final jarak = jarakMatch != null ? "${jarakMatch.group(1)}cm" : "?cm";
+        final persen = persenMatch != null ? "${double.parse(persenMatch.group(1)!).toStringAsFixed(0)}%" : "?%";
+
+        return {
+          'nama': tandon['nama_tandon']?.toString() ?? 'Unknown',
+          'value': "$jarak | $persen",
+          'kode': tandon['kode_tandon']?.toString() ?? '',
+          'type': 'water',
+        };
+      } else {
+        return {
+          'nama': tandon['nama_tandon']?.toString() ?? 'Unknown',
+          'value': "Menunggu data...",
+          'kode': tandon['kode_tandon']?.toString() ?? '',
+          'type': 'water',
+        };
+      }
     }).toList();
     final kebisinganItems = _ruangKebisingan.map((ruang) => {
       'nama': ruang['nama']?.toString() ?? '',

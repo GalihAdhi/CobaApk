@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../helper/mysql_services.dart';
 import 'detail_waterlevel_page.dart';
@@ -21,14 +22,34 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   List<Map<String, dynamic>> _ruangKebisingan = [];
   List<Map<String, dynamic>> _ruangSuhu = [];
+  List<Map<String, dynamic>> _waterLevelItems = [];
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _loadData();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sensorData != widget.sensorData) {
+      _loadData();
+    }
+  }
+
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
+    // --- Kebisingan ---
     final ruangKebisingan = await MySQLService.getKodeRuanganKebisingan();
     final List<Map<String, dynamic>> kebisinganWithValue = [];
 
@@ -38,11 +59,13 @@ class _DashboardPageState extends State<DashboardPage> {
         kebisinganWithValue.add({
           'nama': ruang['nama_ruang'],
           'value': "${data.last['tingkat_kebisingan']} dB",
-          'kode_ruang': ruang['kode_ruang'],
+          'kode': ruang['kode_ruang'],
+          'type': 'noise',
         });
       }
     }
 
+    // --- Suhu ---
     final ruangSuhu = await MySQLService.getKodeRuanganSuhu();
     final List<Map<String, dynamic>> suhuWithValue = [];
 
@@ -52,15 +75,71 @@ class _DashboardPageState extends State<DashboardPage> {
         suhuWithValue.add({
           'nama': ruang['nama_ruang'],
           'value': "${data.first['suhu']}°C",
-           'kode_ruang': ruang['kode_ruang'],
+          'kode': ruang['kode_ruang'],
+          'type': 'temp',
         });
       }
     }
 
-    setState(() {
-      _ruangKebisingan = kebisinganWithValue;
-      _ruangSuhu = suhuWithValue;
-    });
+    // --- Water Level ---
+    final List<Map<String, dynamic>> waterWithValue = [];
+    for (var tandon in widget.pinnedTandons) {
+      final kodeTandon = int.tryParse(tandon['kode_tandon'].toString());
+      final namaTandon = tandon['nama_tandon']?.toString() ?? 'Unknown';
+
+      if (kodeTandon == null) continue;
+
+      final sensorRaw = widget.sensorData[tandon['kode_tandon']];
+      if (sensorRaw != null) {
+        final jarakMatch =
+            RegExp(r'jarak\s*:\s*(\d+\.?\d*)').firstMatch(sensorRaw);
+        final persenMatch =
+            RegExp(r'persen\s*:\s*(\d+\.?\d*)').firstMatch(sensorRaw);
+
+        double? jarak =
+            jarakMatch != null ? double.tryParse(jarakMatch.group(1)!) : null;
+        double? persen =
+            persenMatch != null ? double.tryParse(persenMatch.group(1)!) : null;
+
+        final params = await MySQLService.getParameterTandon(kodeTandon);
+        if (params.isNotEmpty && jarak != null) {
+          final tinggiTandon = params.first['tinggitandon'] as num;
+          final tinggiAir = tinggiTandon - jarak;
+
+          waterWithValue.add({
+            'nama': namaTandon,
+            'value': (persen != null)
+                ? "${tinggiAir.toStringAsFixed(1)} cm | ${persen.toStringAsFixed(0)}%"
+                : "${tinggiAir.toStringAsFixed(1)} cm | ?%",
+            'kode': tandon['kode_tandon'],
+            'type': 'water',
+          });
+        } else {
+          waterWithValue.add({
+            'nama': namaTandon,
+            'value': "Menunggu data...",
+            'kode': tandon['kode_tandon'],
+            'type': 'water',
+          });
+        }
+      } else {
+        waterWithValue.add({
+          'nama': namaTandon,
+          'value': "Menunggu data...",
+          'kode': tandon['kode_tandon'],
+          'type': 'water',
+        });
+      }
+    }
+
+    // Update state
+    if (mounted) {
+      setState(() {
+        _ruangKebisingan = kebisinganWithValue;
+        _ruangSuhu = suhuWithValue;
+        _waterLevelItems = waterWithValue;
+      });
+    }
   }
 
   Widget _buildSection(
@@ -82,7 +161,8 @@ class _DashboardPageState extends State<DashboardPage> {
               const SizedBox(width: 8),
               Text(
                 title,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
+                style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold, color: color),
               ),
             ],
           ),
@@ -90,33 +170,40 @@ class _DashboardPageState extends State<DashboardPage> {
         ...items.map((item) => Card(
               elevation: 3,
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               child: ListTile(
                 title: Text(item['nama']),
                 trailing: Text(
                   item['value'],
-                  style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 16),
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                      fontSize: 16),
                 ),
                 onTap: () {
                   if (item['type'] == 'water') {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => DetailWaterLevelPage(kodeTandon: item['kode']),
+                        builder: (_) =>
+                            DetailWaterLevelPage(kodeTandon: item['kode']),
                       ),
                     );
                   } else if (item['type'] == 'noise') {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => DetailTingkatKebisinganPage(kodeRuangan: item['kode']),
+                        builder: (_) => DetailTingkatKebisinganPage(
+                            kodeRuangan: item['kode']),
                       ),
                     );
                   } else if (item['type'] == 'temp') {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => DetailSuhuPage(kodeRuangan: item['kode']),
+                        builder: (_) =>
+                            DetailSuhuPage(kodeRuangan: item['kode']),
                       ),
                     );
                   }
@@ -129,50 +216,16 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    final waterLevelItems = widget.pinnedTandons.map((tandon) {
-      final sensorData = widget.sensorData[tandon['kode_tandon']];
-      if (sensorData != null) {
-        final jarakMatch = RegExp(r'jarak\s*:\s*(\d+\.?\d*)').firstMatch(sensorData);
-        final persenMatch = RegExp(r'persen\s*:\s*(\d+\.?\d*)').firstMatch(sensorData);
-        
-        final jarak = jarakMatch != null ? "${jarakMatch.group(1)}cm" : "?cm";
-        final persen = persenMatch != null ? "${double.parse(persenMatch.group(1)!).toStringAsFixed(0)}%" : "?%";
-
-        return {
-          'nama': tandon['nama_tandon']?.toString() ?? 'Unknown',
-          'value': "$jarak | $persen",
-          'kode': tandon['kode_tandon']?.toString() ?? '',
-          'type': 'water',
-        };
-      } else {
-        return {
-          'nama': tandon['nama_tandon']?.toString() ?? 'Unknown',
-          'value': "Menunggu data...",
-          'kode': tandon['kode_tandon']?.toString() ?? '',
-          'type': 'water',
-        };
-      }
-    }).toList();
-    final kebisinganItems = _ruangKebisingan.map((ruang) => {
-      'nama': ruang['nama']?.toString() ?? '',
-      'value': ruang['value']?.toString() ?? '',
-      'kode': ruang['kode_ruang']?.toString() ?? '',
-      'type': 'noise',
-    }).toList();
-    final suhuItems = _ruangSuhu.map((ruang) => {
-      'nama': ruang['nama']?.toString() ?? '',
-      'value': ruang['value']?.toString() ?? '',
-      'kode': ruang['kode_ruang']?.toString() ?? '',
-      'type': 'temp',
-    }).toList();
-
     return Scaffold(
       appBar: AppBar(title: const Text("Dashboard")),
       body: ListView(
         children: [
-          _buildSection("Water Level", Icons.water_drop, Colors.blueAccent, waterLevelItems),
-          _buildSection("Tingkat Kebisingan", Icons.volume_up, Colors.orange, kebisinganItems),
-          _buildSection("Suhu Ruangan", Icons.thermostat, Colors.redAccent, suhuItems),
+          _buildSection("Water Level", Icons.water_drop, Colors.blueAccent,
+              _waterLevelItems),
+          _buildSection("Tingkat Kebisingan", Icons.volume_up, Colors.orange,
+              _ruangKebisingan),
+          _buildSection(
+              "Suhu", Icons.thermostat, Colors.redAccent, _ruangSuhu),
         ],
       ),
     );
